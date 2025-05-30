@@ -37,9 +37,9 @@ def event_scraper(season):
         for day in days:
             print(day["date"])
             gameIds = get_game_ids(day)
-        for gameId in gameIds:
-            game_data = get_game_data(gameId)
-            event_list.extend(game_data)
+            for gameId in gameIds:
+                game_data = get_game_data(gameId)
+                event_list.extend(game_data)
 
     df = pd.DataFrame(event_list)
     df.fillna("NA", inplace=True)
@@ -318,6 +318,7 @@ def transform_shift_times(shift):
     shift["start_time"] = convert_time_to_seconds(shift["startTime"])
     shift["end_time"] = convert_time_to_seconds(shift["endTime"])
     shift["team_id"] = shift["teamId"]
+    shift["event_type"] = "line_change"
 
     # Remove unnecessary keys
     removed_keys = [
@@ -351,11 +352,3 @@ def convert_time_to_seconds(str):
 
 
 event_scraper("2010")
-# event_scraper('20152016')
-# event_scraper('20162017')
-# event_scraper('20172018')
-# event_scraper('20182019')
-# event_scraper('20192020')
-# event_scraper('20202021')
-# event_scraper('20212022')
-# event_scraper("20222023")
