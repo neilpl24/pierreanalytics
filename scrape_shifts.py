@@ -22,10 +22,11 @@ def compare_dates(date1, date2):
 
 def event_scraper(season):
     """Returns a season full of event data."""
+    global home_goals, away_goals
     schedule = requests.get(
         f"https://api-web.nhle.com/v1/schedule/{season}-09-01"
     ).json()
-    endDate = "2011-07-01"
+    endDate = "2023-09-01"
     while "nextStartDate" in schedule.keys():
         nextStartDate = schedule["nextStartDate"]
         schedule = requests.get(
@@ -40,6 +41,8 @@ def event_scraper(season):
             for gameId in gameIds:
                 game_data = get_game_data(gameId)
                 event_list.extend(game_data)
+                away_goals = 0
+                home_goals = 0
 
     df = pd.DataFrame(event_list)
     df.fillna("NA", inplace=True)
@@ -72,7 +75,7 @@ def event_scraper(season):
             "duration",
         ]
     ]
-    df.to_csv("./season_data/20102011.csv", index=False)
+    df.to_csv("./season_data/20222023.csv", index=False)
 
 
 def get_game_ids(date):
@@ -99,7 +102,7 @@ def apply_game_data(game_data, event):
     event["game_type"] = (
         "Regular Season" if str(game_data["id"])[4:6] == "02" else "Playoffs"
     )
-    event["season"] = "20102011"
+    event["season"] = "20222023"
 
     return event
 
@@ -138,21 +141,24 @@ def get_strength_state(team_arr, opposing_arr):
     return f"{team_skaters}v{opposing_skaters}"
 
 
-def get_game_data(gameId):
+def get_game_data(game_id):
     """Grabs shifts and PBP data for a given game"""
-    try:
-        shifts_data = requests.get(
-            f"https://api.nhle.com/stats/rest/en/shiftcharts?cayenneExp=gameId={gameId}"
-        ).json()
-        pbp = requests.get(
-            f"https://api-web.nhle.com/v1/gamecenter/{gameId}/play-by-play"
-        ).json()
-    except (
-        requests.exceptions.RequestException,
-        ConnectionResetError,
-    ) as err:
-        time.sleep(10)
-        print("Taking a break...")
+    # I hate doing this but fuck it
+    while True:
+        try:
+            shifts_data = requests.get(
+                f"https://api.nhle.com/stats/rest/en/shiftcharts?cayenneExp=gameId={game_id}"
+            ).json()
+            pbp = requests.get(
+                f"https://api-web.nhle.com/v1/gamecenter/{game_id}/play-by-play"
+            ).json()
+            break
+        except (
+            requests.exceptions.RequestException,
+            ConnectionResetError,
+        ) as err:
+            time.sleep(10)
+            print("Taking a break...")
 
     events = pbp["plays"]
     shifts = shifts_data["data"]
@@ -344,11 +350,11 @@ def transform_shift_times(shift):
 
 
 def convert_time_to_seconds(str):
-    if str is None:
+    if str is None or str == "":
         return 0
     minutes, seconds = map(int, str.split(":"))
     total_seconds = (minutes * 60) + seconds
     return total_seconds
 
 
-event_scraper("2010")
+event_scraper("2022")
