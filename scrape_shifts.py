@@ -26,7 +26,7 @@ def event_scraper(season):
     schedule = requests.get(
         f"https://api-web.nhle.com/v1/schedule/{season}-09-01"
     ).json()
-    endDate = "2023-09-01"
+    endDate = f"{season+1}-09-01"
     while "nextStartDate" in schedule.keys():
         nextStartDate = schedule["nextStartDate"]
         schedule = requests.get(
@@ -39,7 +39,7 @@ def event_scraper(season):
             print(day["date"])
             gameIds = get_game_ids(day)
             for gameId in gameIds:
-                game_data = get_game_data(gameId)
+                game_data = get_game_data(gameId, season)
                 event_list.extend(game_data)
                 away_goals = 0
                 home_goals = 0
@@ -54,6 +54,7 @@ def event_scraper(season):
             "arena",
             "home_team_id",
             "away_team_id",
+            "team_id",
             "home_goals",
             "away_goals",
             "game_type",
@@ -72,10 +73,11 @@ def event_scraper(season):
             "team_skaters",
             "opposing_skaters",
             "strength",
+            "skater_state",
             "duration",
         ]
     ]
-    df.to_csv("./season_data/20222023.csv", index=False)
+    df.to_csv(f"./season_data/{season}{season+1}.csv", index=False)
 
 
 def get_game_ids(date):
@@ -92,7 +94,7 @@ def get_game_ids(date):
     return gameIDs
 
 
-def apply_game_data(game_data, event):
+def apply_game_data(game_data, event, season):
     """Fills in remaining columns for an event"""
     event["game_id"] = game_data["id"]
     event["game_date"] = game_data["gameDate"]
@@ -102,15 +104,15 @@ def apply_game_data(game_data, event):
     event["game_type"] = (
         "Regular Season" if str(game_data["id"])[4:6] == "02" else "Playoffs"
     )
-    event["season"] = "20222023"
+    event["season"] = f"{season}{season+1}"
 
     return event
 
 
 def get_skaters_for_event(period_time, shifts, period, team_id):
     """Gets the skaters on the ice for a change or event"""
-    team_arr = []
-    opposing_arr = []
+    team_arr = set()
+    opposing_arr = set()
 
     for shift in shifts:
         shift_start = shift["start_time"]
@@ -124,24 +126,36 @@ def get_skaters_for_event(period_time, shifts, period, team_id):
             player_team = shift["team_id"]
 
             if player_team == team_id:
-                team_arr.append(shift["playerId"])
+                team_arr.add(shift["playerId"])
             else:
-                opposing_arr.append(shift["playerId"])
+                opposing_arr.add(shift["playerId"])
 
     return {
-        "team_skaters": team_arr,
-        "opposing_skaters": opposing_arr,
+        "team_skaters": list(team_arr),
+        "opposing_skaters": list(opposing_arr),
     }
 
 
-def get_strength_state(team_arr, opposing_arr):
+def get_skater_state(team_arr, opposing_arr):
     """Returns the strength of an event"""
     team_skaters = len(team_arr)
     opposing_skaters = len(opposing_arr)
     return f"{team_skaters}v{opposing_skaters}"
 
 
-def get_game_data(game_id):
+def get_strength_state(team_arr, opposing_arr):
+    """Returns the strength of an event"""
+    team_skaters = len(team_arr)
+    opposing_skaters = len(opposing_arr)
+    if team_skaters == opposing_skaters:
+        return "EV"
+    elif team_skaters > opposing_skaters:
+        return "Powerplay"
+    else:
+        return "Shorthanded"
+
+
+def get_game_data(game_id, season):
     """Grabs shifts and PBP data for a given game"""
     # I hate doing this but fuck it
     while True:
@@ -162,6 +176,8 @@ def get_game_data(game_id):
 
     events = pbp["plays"]
     shifts = shifts_data["data"]
+    if len(shifts) == 0:
+        print(f"Nothing for {pbp['id']}")
     # Transform shift data
     for i, shift in enumerate(shifts):
         shift["shift_start"] = get_shift_state(shift, events)
@@ -170,9 +186,6 @@ def get_game_data(game_id):
     # Order by time and period
     for i, event in enumerate(events):
         events[i] = transform_pbp(event, pbp)
-    for item in shifts + events:
-        if "start_time" not in item:
-            print(item)
     shifts_and_events = sorted(
         shifts + events, key=lambda x: (x["period"], -x["start_time"])
     )
@@ -182,11 +195,14 @@ def get_game_data(game_id):
         period = occurence["period"]
         team_id = occurence["team_id"]
 
-        occurence = apply_game_data(pbp, occurence)
+        occurence = apply_game_data(pbp, occurence, season)
 
         state = get_skaters_for_event(period_time, shifts, period, team_id)
         occurence["team_skaters"] = state["team_skaters"]
         occurence["opposing_skaters"] = state["opposing_skaters"]
+        occurence["skater_state"] = get_skater_state(
+            state["team_skaters"], state["opposing_skaters"]
+        )
         occurence["strength"] = get_strength_state(
             state["team_skaters"], state["opposing_skaters"]
         )
@@ -357,4 +373,10 @@ def convert_time_to_seconds(str):
     return total_seconds
 
 
-event_scraper("2022")
+# for year in range(2010, 2020):
+#     event_list = []
+#     event_scraper(year)
+# for year in range(2021, 2024):
+#     event_list = []
+#     event_scraper(year)
+event_scraper(2023)
