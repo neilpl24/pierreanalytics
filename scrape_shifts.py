@@ -2,11 +2,16 @@ import requests
 import pandas as pd
 import numpy as np
 from datetime import datetime
+import numbers
 import time
+import gc
 
+gc.collect()
 event_list = []
 home_goals = 0
 away_goals = 0
+
+csv_shifts = pd.read_csv("missing_shift_data_2024.csv")
 
 
 def compare_dates(date1, date2):
@@ -58,6 +63,7 @@ def event_scraper(season):
             "home_goals",
             "away_goals",
             "game_type",
+            "event_id",
             "period",
             "period_type",
             "start_time",
@@ -176,8 +182,9 @@ def get_game_data(game_id, season):
 
     events = pbp["plays"]
     shifts = shifts_data["data"]
+    team_map = get_team_ids(pbp)
     if len(shifts) == 0:
-        print(f"Nothing for {pbp['id']}")
+        shifts = use_back_up_shifts(game_id, team_map)
     # Transform shift data
     for i, shift in enumerate(shifts):
         shift["shift_start"] = get_shift_state(shift, events)
@@ -215,6 +222,7 @@ def transform_pbp(event, game):
     global home_goals, away_goals
     event["period"] = event["periodDescriptor"]["number"]
     event["period_type"] = event["periodDescriptor"]["periodType"]
+    event["event_id"] = event["eventId"]
     event["start_time"] = convert_time_to_seconds(event["timeRemaining"])
     event["event_type"] = event["typeDescKey"]
     details = event.get("details", {})
@@ -223,6 +231,7 @@ def transform_pbp(event, game):
             details.get(key)
             for key in [
                 "hittingPlayerId",
+                "scoringPlayerId",
                 "shootingPlayerId",
                 "winningPlayerId",
                 "playerId",
@@ -237,7 +246,9 @@ def transform_pbp(event, game):
             details.get(key)
             for key in [
                 "hitteePlayerId",
-                "blockingPlayerId" "losingPlayerId",
+                "blockingPlayerId",
+                "assist1PlayerId",
+                "losingPlayerId",
                 "drawnByPlayerId",
             ]
             if details.get(key) is not None
@@ -277,24 +288,24 @@ def transform_pbp(event, game):
     return event
 
 
-def get_team_name(game):
+def get_team_ids(game):
     """Gets a map of team ID -> team name"""
     team_map = {}
     away_team_id = game["awayTeam"]["id"]
     home_team_id = game["homeTeam"]["id"]
-    away_team_name = (
-        game["awayTeam"]["placeName"]["default"]
-        + " "
-        + game["awayTeam"]["commonName"]["default"]
-    )
-    home_team_name = (
-        game["homeTeam"]["placeName"]["default"]
-        + " "
-        + game["homeTeam"]["commonName"]["default"]
-    )
+    # away_team_name = (
+    #     game["awayTeam"]["placeName"]["default"]
+    #     + " "
+    #     + game["awayTeam"]["commonName"]["default"]
+    # )
+    # home_team_name = (
+    #     game["homeTeam"]["placeName"]["default"]
+    #     + " "
+    #     + game["homeTeam"]["commonName"]["default"]
+    # )
 
-    team_map[away_team_id] = away_team_name
-    team_map[home_team_id] = home_team_name
+    team_map["away"] = away_team_id
+    team_map["home"] = home_team_id
 
     return team_map
 
@@ -365,18 +376,30 @@ def transform_shift_times(shift):
     return shift
 
 
+def use_back_up_shifts(game_id, team_map):
+    """Unfortunately, some games in the NHL API from the 24-25 season are missing shifts.
+    Was lucky to obtain a CSV for missing shifts from @yimmymcbill on Twitter who connected this API to the HTML shifts
+    """
+    shifts = csv_shifts[csv_shifts["gameId"] == game_id].copy()
+    shifts["duration"] = shifts["endTime"] - shifts["startTime"]
+    shifts["teamId"] = shifts["team"].map(team_map)
+    return shifts.to_dict(orient="records")
+
+
 def convert_time_to_seconds(str):
     if str is None or str == "":
         return 0
+    if isinstance(str, numbers.Number):
+        return str
     minutes, seconds = map(int, str.split(":"))
     total_seconds = (minutes * 60) + seconds
     return total_seconds
 
 
-# for year in range(2010, 2020):
+for year in range(2010, 2020):
+    event_list = []
+    event_scraper(year)
+# event_scraper(2020)
+# for year in range(2021, 2025):
 #     event_list = []
 #     event_scraper(year)
-# for year in range(2021, 2024):
-#     event_list = []
-#     event_scraper(year)
-event_scraper(2023)
