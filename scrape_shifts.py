@@ -44,7 +44,7 @@ def event_scraper(season):
     """Returns a season full of event data."""
     global home_goals, away_goals
     schedule = requests.get(
-        f"https://api-web.nhle.com/v1/schedule/{season}-12-01"
+        f"https://api-web.nhle.com/v1/schedule/{season}-09-01"
     ).json()
     endDate = f"{season+1}-09-01"
     while "nextStartDate" in schedule.keys():
@@ -146,11 +146,10 @@ def get_skaters_for_event(period_time, shifts, period, team_id):
     for shift in shifts:
         shift_start = shift["start_time"]
         shift_end = shift["end_time"]
-        print(shift_start, shift_end, period_time)
         if (
             shift["period"] == period
-            and shift_start < period_time
-            and period_time <= shift_end
+            and shift_start >= period_time
+            and shift_end < period_time
         ):
             player_team = shift["team_id"]
 
@@ -436,10 +435,10 @@ def convert_time_to_seconds(str):
     return total_seconds
 
 
-for year in range(2010, 2020):
-    event_list = []
-    event_scraper(year)
-# event_scraper(2020)
-# for year in range(2021, 2025):
+# for year in range(2011, 2020):
 #     event_list = []
 #     event_scraper(year)
+# event_scraper(2020)
+for year in range(2021, 2025):
+    event_list = []
+    event_scraper(year)
