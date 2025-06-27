@@ -25,11 +25,26 @@ def compare_dates(date1, date2):
         return False
 
 
+def get_player_name(player_id, roster):
+    """Gets player name from player id"""
+    if player_id is None:
+        return pd.NA
+    player = list(
+        filter(
+            lambda p: p["playerId"] == player_id,
+            roster,
+        )
+    )
+    if len(player) == 0:
+        return pd.NA
+    return f'{player[0]["firstName"]["default"]} {player[0]["lastName"]["default"]}'
+
+
 def event_scraper(season):
     """Returns a season full of event data."""
     global home_goals, away_goals
     schedule = requests.get(
-        f"https://api-web.nhle.com/v1/schedule/{season}-09-01"
+        f"https://api-web.nhle.com/v1/schedule/{season}-12-01"
     ).json()
     endDate = f"{season+1}-09-01"
     while "nextStartDate" in schedule.keys():
@@ -59,6 +74,8 @@ def event_scraper(season):
             "arena",
             "home_team_id",
             "away_team_id",
+            "home_team_name",
+            "away_team_name",
             "team_id",
             "home_goals",
             "away_goals",
@@ -69,12 +86,16 @@ def event_scraper(season):
             "start_time",
             "event_type",
             "event_player_1",
+            "event_player_1_name",
             "event_player_2",
+            "event_player_2_name",
+            "event_player_3",
             "zone",
             "x",
             "y",
             "shot_type",
             "goalie_id",
+            "goalie_name",
             "shift_start",
             "team_skaters",
             "opposing_skaters",
@@ -106,6 +127,8 @@ def apply_game_data(game_data, event, season):
     event["game_date"] = game_data["gameDate"]
     event["arena"] = game_data["venue"]["default"]
     event["home_team_id"] = game_data["homeTeam"]["id"]
+    event["home_team_name"] = game_data["homeTeam"]["placeName"]["default"]
+    event["away_team_name"] = game_data["awayTeam"]["placeName"]["default"]
     event["away_team_id"] = game_data["awayTeam"]["id"]
     event["game_type"] = (
         "Regular Season" if str(game_data["id"])[4:6] == "02" else "Playoffs"
@@ -123,7 +146,7 @@ def get_skaters_for_event(period_time, shifts, period, team_id):
     for shift in shifts:
         shift_start = shift["start_time"]
         shift_end = shift["end_time"]
-
+        print(shift_start, shift_end, period_time)
         if (
             shift["period"] == period
             and shift_start < period_time
@@ -241,6 +264,9 @@ def transform_pbp(event, game):
         ),
         None,
     )
+    event["event_player_1_name"] = get_player_name(
+        event["event_player_1"], game["rosterSpots"]
+    )
     event["event_player_2"] = next(
         (
             details.get(key)
@@ -255,11 +281,25 @@ def transform_pbp(event, game):
         ),
         None,
     )
+    event["event_player_2_name"] = get_player_name(
+        event["event_player_2"], game["rosterSpots"]
+    )
+    event["event_player_3"] = next(
+        (
+            details.get(key)
+            for key in [
+                "assist2PlayerId",
+            ]
+            if details.get(key) is not None
+        ),
+        None,
+    )
     event["zone"] = details.get("zoneCode")
     event["x"] = details.get("xCoord")
     event["y"] = details.get("yCoord")
     event["shot_type"] = details.get("shotType")
     event["goalie_id"] = details.get("goalieInNetId")
+    event["goalie_name"] = get_player_name(event["goalie_id"], game["rosterSpots"])
     event["team_id"] = details.get("eventOwnerTeamId")
 
     if event["typeDescKey"] == "goal":
@@ -293,16 +333,16 @@ def get_team_ids(game):
     team_map = {}
     away_team_id = game["awayTeam"]["id"]
     home_team_id = game["homeTeam"]["id"]
-    # away_team_name = (
-    #     game["awayTeam"]["placeName"]["default"]
-    #     + " "
-    #     + game["awayTeam"]["commonName"]["default"]
-    # )
-    # home_team_name = (
-    #     game["homeTeam"]["placeName"]["default"]
-    #     + " "
-    #     + game["homeTeam"]["commonName"]["default"]
-    # )
+    away_team_name = (
+        game["awayTeam"]["placeName"]["default"]
+        + " "
+        + game["awayTeam"]["commonName"]["default"]
+    )
+    home_team_name = (
+        game["homeTeam"]["placeName"]["default"]
+        + " "
+        + game["homeTeam"]["commonName"]["default"]
+    )
 
     team_map["away"] = away_team_id
     team_map["home"] = home_team_id
@@ -348,8 +388,8 @@ def get_shift_state(shift, events):
 def transform_shift_times(shift):
     """Transforms all of the shift time fields from mm:ss to seconds"""
     shift["duration"] = convert_time_to_seconds(shift["duration"])
-    shift["start_time"] = convert_time_to_seconds(shift["startTime"])
-    shift["end_time"] = convert_time_to_seconds(shift["endTime"])
+    shift["start_time"] = 1200 - convert_time_to_seconds(shift["startTime"])
+    shift["end_time"] = 1200 - convert_time_to_seconds(shift["endTime"])
     shift["team_id"] = shift["teamId"]
     shift["event_type"] = "line_change"
 
