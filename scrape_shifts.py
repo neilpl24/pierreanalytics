@@ -81,6 +81,7 @@ def event_scraper(season):
             "away_goals",
             "game_type",
             "event_id",
+            "goal_highlight_id",
             "period",
             "period_type",
             "start_time",
@@ -127,8 +128,16 @@ def apply_game_data(game_data, event, season):
     event["game_date"] = game_data["gameDate"]
     event["arena"] = game_data["venue"]["default"]
     event["home_team_id"] = game_data["homeTeam"]["id"]
-    event["home_team_name"] = game_data["homeTeam"]["placeName"]["default"]
-    event["away_team_name"] = game_data["awayTeam"]["placeName"]["default"]
+    event["home_team_name"] = (
+        game_data["homeTeam"]["placeName"]["default"]
+        + " "
+        + game_data["homeTeam"]["commonName"]["default"]
+    )
+    event["away_team_name"] = (
+        game_data["awayTeam"]["placeName"]["default"]
+        + " "
+        + game_data["awayTeam"]["commonName"]["default"]
+    )
     event["away_team_id"] = game_data["awayTeam"]["id"]
     event["game_type"] = (
         "Regular Season" if str(game_data["id"])[4:6] == "02" else "Playoffs"
@@ -148,8 +157,8 @@ def get_skaters_for_event(period_time, shifts, period, team_id):
         shift_end = shift["end_time"]
         if (
             shift["period"] == period
-            and shift_start >= period_time
-            and shift_end < period_time
+            and shift_start > period_time
+            and shift_end <= period_time
         ):
             player_team = shift["team_id"]
 
@@ -248,6 +257,7 @@ def transform_pbp(event, game):
     event["start_time"] = convert_time_to_seconds(event["timeRemaining"])
     event["event_type"] = event["typeDescKey"]
     details = event.get("details", {})
+    event["goal_highlight_id"] = details.get("highlightClip", pd.NA)
     event["event_player_1"] = next(
         (
             details.get(key)
@@ -387,8 +397,8 @@ def get_shift_state(shift, events):
 def transform_shift_times(shift):
     """Transforms all of the shift time fields from mm:ss to seconds"""
     shift["duration"] = convert_time_to_seconds(shift["duration"])
-    shift["start_time"] = 1200 - convert_time_to_seconds(shift["startTime"])
-    shift["end_time"] = 1200 - convert_time_to_seconds(shift["endTime"])
+    shift["start_time"] = convert_time_to_seconds(shift["startTime"])
+    shift["end_time"] = convert_time_to_seconds(shift["endTime"])
     shift["team_id"] = shift["teamId"]
     shift["event_type"] = "line_change"
 
@@ -435,9 +445,9 @@ def convert_time_to_seconds(str):
     return total_seconds
 
 
-# for year in range(2011, 2020):
-#     event_list = []
-#     event_scraper(year)
+for year in range(2011, 2020):
+    event_list = []
+    event_scraper(year)
 # event_scraper(2020)
 for year in range(2021, 2025):
     event_list = []
