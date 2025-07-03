@@ -44,7 +44,7 @@ def event_scraper(season):
     """Returns a season full of event data."""
     global home_goals, away_goals
     schedule = requests.get(
-        f"https://api-web.nhle.com/v1/schedule/{season}-09-01"
+        f"https://api-web.nhle.com/v1/schedule/{season}-12-01"
     ).json()
     endDate = f"{season+1}-09-01"
     while "nextStartDate" in schedule.keys():
@@ -157,11 +157,10 @@ def get_skaters_for_event(period_time, shifts, period, team_id):
         shift_end = shift["end_time"]
         if (
             shift["period"] == period
-            and shift_start > period_time
-            and shift_end <= period_time
+            and shift_start < period_time
+            and shift_end >= period_time
         ):
             player_team = shift["team_id"]
-
             if player_team == team_id:
                 team_arr.add(shift["playerId"])
             else:
@@ -225,13 +224,25 @@ def get_game_data(game_id, season):
     for i, event in enumerate(events):
         events[i] = transform_pbp(event, pbp)
     shifts_and_events = sorted(
-        shifts + events, key=lambda x: (x["period"], -x["start_time"])
+        shifts + events, key=lambda x: (x["period"], x["start_time"])
     )
 
     for occurence in shifts_and_events:
         period_time = occurence["start_time"]
         period = occurence["period"]
         team_id = occurence["team_id"]
+        if team_id == pbp["homeTeam"]["id"]:
+            occurence["team"] = (
+                pbp["homeTeam"]["placeName"]["default"]
+                + " "
+                + pbp["homeTeam"]["commonName"]["default"]
+            )
+        else:
+            occurence["team"] = (
+                pbp["awayTeam"]["placeName"]["default"]
+                + " "
+                + pbp["awayTeam"]["commonName"]["default"]
+            )
 
         occurence = apply_game_data(pbp, occurence, season)
 
@@ -254,7 +265,7 @@ def transform_pbp(event, game):
     event["period"] = event["periodDescriptor"]["number"]
     event["period_type"] = event["periodDescriptor"]["periodType"]
     event["event_id"] = event["eventId"]
-    event["start_time"] = convert_time_to_seconds(event["timeRemaining"])
+    event["start_time"] = convert_time_to_seconds(event["timeInPeriod"])
     event["event_type"] = event["typeDescKey"]
     details = event.get("details", {})
     event["goal_highlight_id"] = details.get("highlightClip", pd.NA)
@@ -445,10 +456,10 @@ def convert_time_to_seconds(str):
     return total_seconds
 
 
-for year in range(2011, 2020):
-    event_list = []
-    event_scraper(year)
+# for year in range(2010, 2020):
+#     event_list = []
+#     event_scraper(year)
 # event_scraper(2020)
-for year in range(2021, 2025):
-    event_list = []
-    event_scraper(year)
+# for year in range(2021, 2025):
+#     event_list = []
+#     event_scraper(year)
