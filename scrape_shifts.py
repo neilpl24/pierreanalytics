@@ -44,7 +44,7 @@ def event_scraper(season):
     """Returns a season full of event data."""
     global home_goals, away_goals
     schedule = requests.get(
-        f"https://api-web.nhle.com/v1/schedule/{season}-12-01"
+        f"https://api-web.nhle.com/v1/schedule/{season}-09-01"
     ).json()
     endDate = f"{season+1}-09-01"
     while "nextStartDate" in schedule.keys():
@@ -122,6 +122,20 @@ def get_game_ids(date):
     return gameIDs
 
 
+def skater_to_team_map(pbp):
+    team_map = {}
+    for player in pbp["rosterSpots"]:
+        team_map[player["playerId"]] = player["teamId"]
+    return team_map
+
+
+def skater_to_position_map(pbp):
+    roster_map = {}
+    for player in pbp["rosterSpots"]:
+        roster_map[player["playerId"]] = player["positionCode"]
+    return roster_map
+
+
 def apply_game_data(game_data, event, season):
     """Fills in remaining columns for an event"""
     event["game_id"] = game_data["id"]
@@ -147,7 +161,7 @@ def apply_game_data(game_data, event, season):
     return event
 
 
-def get_skaters_for_event(period_time, shifts, period, team_id):
+def get_skaters_for_event(period_time, shifts, period, team_id, team_map, roster_map):
     """Gets the skaters on the ice for a change or event"""
     team_arr = set()
     opposing_arr = set()
@@ -160,7 +174,12 @@ def get_skaters_for_event(period_time, shifts, period, team_id):
             and shift_start < period_time
             and shift_end >= period_time
         ):
-            player_team = shift["team_id"]
+            if (
+                team_map.get(shift["playerId"]) == None
+                or roster_map[shift["playerId"]] == "G"
+            ):
+                continue
+            player_team = team_map[shift["playerId"]]
             if player_team == team_id:
                 team_arr.add(shift["playerId"])
             else:
@@ -213,6 +232,8 @@ def get_game_data(game_id, season):
     events = pbp["plays"]
     shifts = shifts_data["data"]
     team_map = get_team_ids(pbp)
+    player_team_map = skater_to_team_map(pbp)
+    roster_team_map = skater_to_position_map(pbp)
     if len(shifts) == 0:
         shifts = use_back_up_shifts(game_id, team_map)
     # Transform shift data
@@ -246,7 +267,9 @@ def get_game_data(game_id, season):
 
         occurence = apply_game_data(pbp, occurence, season)
 
-        state = get_skaters_for_event(period_time, shifts, period, team_id)
+        state = get_skaters_for_event(
+            period_time, shifts, period, team_id, player_team_map, roster_team_map
+        )
         occurence["team_skaters"] = state["team_skaters"]
         occurence["opposing_skaters"] = state["opposing_skaters"]
         occurence["skater_state"] = get_skater_state(
@@ -456,10 +479,10 @@ def convert_time_to_seconds(str):
     return total_seconds
 
 
-# for year in range(2010, 2020):
-#     event_list = []
-#     event_scraper(year)
+for year in range(2010, 2020):
+    event_list = []
+    event_scraper(year)
 # event_scraper(2020)
-# for year in range(2021, 2025):
-#     event_list = []
-#     event_scraper(year)
+for year in range(2024, 2025):
+    event_list = []
+    event_scraper(year)
