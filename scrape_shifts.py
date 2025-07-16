@@ -252,6 +252,8 @@ def get_game_data(game_id, season):
         period_time = occurence["start_time"]
         period = occurence["period"]
         team_id = occurence["team_id"]
+        if team_id == None:
+            team_id = pbp["homeTeam"]["id"]
         if team_id == pbp["homeTeam"]["id"]:
             occurence["team"] = (
                 pbp["homeTeam"]["placeName"]["default"]
@@ -479,10 +481,10 @@ def convert_time_to_seconds(str):
     return total_seconds
 
 
-for year in range(2010, 2020):
-    event_list = []
-    event_scraper(year)
-# event_scraper(2020)
-for year in range(2024, 2025):
-    event_list = []
-    event_scraper(year)
+# for year in range(2010, 2020):
+#     event_list = []
+#     event_scraper(year)
+event_scraper(2024)
+# for year in range(2021, 2024):
+#     event_list = []
+#     event_scraper(year)
